@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Smooth Centered Sound Visualizer</title>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: Arial, sans-serif;
+    transition: background 0.5s ease;
+    background: linear-gradient(135deg, #f9d5e5, #d0f4de);
+    overflow: hidden;
+  }
+
+  .controls {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: bold;
+    color: #333;
+  }
+
+  .visualizer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 90%;
+    max-width: 700px;
+    height: 250px;
+    gap: 6px;
+  }
+
+  .bar {
+    flex: 1;
+    background: hsl(200, 60%, 65%);
+    border-radius: 10px;
+    transition: background 0.3s ease, height 0.1s ease;
+  }
+
+</style>
+</head>
+<body>
+<div class="controls">
+  <label>
+    <input type="checkbox" id="barMode"> Bar Mode Only
+  </label>
+</div>
+
+<div class="visualizer" id="visualizer"></div>
+
+<script>
+const NUM_BARS = 32;
+const visualizer = document.getElementById("visualizer");
+const barModeToggle = document.getElementById("barMode");
+
+const bars = [];
+for(let i=0; i<NUM_BARS; i++){
+  const bar = document.createElement("div");
+  bar.classList.add("bar");
+  bar.style.height = "20px"; 
+  visualizer.appendChild(bar);
+  bars.push({el: bar, height: 20});
+}
+
+navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const analyser = audioCtx.createAnalyser();
+  const source = audioCtx.createMediaStreamSource(stream);
+  source.connect(analyser);
+  analyser.fftSize = 128;
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+  function animate(){
+    analyser.getByteFrequencyData(dataArray);
+    const avg = dataArray.reduce((a,b)=>a+b)/dataArray.length;
+
+    bars.forEach((barObj, i)=>{
+      const value = dataArray[i] || 0;
+      const targetHeight = 10 + (value / 255) * 100; // scale
+      barObj.height += (targetHeight - barObj.height)*0.2; // smooth easing
+
+      // grow bars from center
+      barObj.el.style.height = `${barObj.height}px`;
+      barObj.el.style.marginTop = `${125 - barObj.height/2}px`;
+      barObj.el.style.marginBottom = `${125 - barObj.height/2}px`;
+
+      // Pastel bar colors
+      const hue = (i*10 + avg*1.5)%360;
+      const pastelHue = (hue+30)%360;
+      if(barModeToggle.checked){
+        barObj.el.style.background = `hsl(${pastelHue},70%,65%)`;
+      } else {
+        barObj.el.style.background = `hsl(200,60%,65%)`;
+      }
+    });
+
+    // Background gradient
+    if(!barModeToggle.checked){
+      if(avg>5){
+        const hue1 = (avg*1.8)%360;
+        const hue2 = (avg*2.3+60)%360;
+        document.body.style.background = `linear-gradient(135deg, hsl(${hue1},70%,75%), hsl(${hue2},65%,70%))`;
+      }else{
+        document.body.style.background = `linear-gradient(135deg, #f9d5e5, #d0f4de)`;
+      }
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+}).catch(err => alert("Microphone access denied."));
+</script>
+</body>
+</html>
